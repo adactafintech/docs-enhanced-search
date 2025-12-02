@@ -12,7 +12,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { nord } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 import styles from './Chat.module.css'
-import Contoso from '../../assets/Contoso.svg'
+import Adacta from '../../assets/Adacta.png'
 import { XSSAllowTags } from '../../constants/sanatizeAllowables'
 
 import {
@@ -108,7 +108,7 @@ const Chat = () => {
 
   useEffect(() => {
     if (!appStateContext?.state.isLoading) {
-      setLogo(ui?.chat_logo || ui?.logo || Contoso)
+      setLogo(ui?.chat_logo || ui?.logo || Adacta)
     }
   }, [appStateContext?.state.isLoading])
 
@@ -720,12 +720,35 @@ const Chat = () => {
     if (message?.role && message?.role === 'tool' && typeof message?.content === "string") {
       try {
         const toolMessage = JSON.parse(message.content) as ToolMessageContent
-        return toolMessage.citations
+        return replaceDocsUrls(toolMessage.citations)
       } catch {
         return []
       }
     }
     return []
+  }
+
+   const replaceDocsUrls = (citations: Citation[]) => {
+    for (const citation of citations ) {
+      
+      if (citation.content.includes('https://docsenhance.blob.core.windows.net/docs/')) { 
+        // in citation.content get the wole word that starts with https://docsenhance.blob.core.windows.net/docs/ and
+        // replace it with https://docs.adinsure.com/. Also if the word ends with .md, replace with /
+        const regex = /https:\/\/docsenhance\.blob\.core\.windows\.net\/docs\/[^\s)]+/g 
+        citation.content = citation.content.replace(regex, (match) => {
+          let newUrl = match.replace('https://docsenhance.blob.core.windows.net/docs/', 'https://docs.adinsure.com/')
+          if (newUrl.endsWith('.md')) {
+            newUrl = newUrl.slice(0, -3) + '/'
+          }
+          if (newUrl.endsWith('_index/')) {
+            newUrl = newUrl.slice(0, -7)
+          }
+          return newUrl
+        })
+      }
+
+    }
+    return citations;
   }
 
   const parsePlotFromMessage = (message: ChatMessage) => {
