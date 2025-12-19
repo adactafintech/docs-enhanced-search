@@ -1,0 +1,58 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+name: "Docs Enhanced Search"
+
+trigger:
+  tags:
+    include:
+      - v*
+
+variables:
+  # Name of ACR service connection in Azure DevOps
+  # (Create this in Project Settings -> Service connections)
+  acrServiceConnection: 'adinsure-acr-connection'
+  acrName: 'adinsure.azurecr.io'
+  imageName: 'operations/docs-enhanced-search'
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+- stage: BuildAndPush
+  displayName: Build and push Docker image
+  jobs:
+  - job: Build
+    displayName: Build and push
+    steps:
+    - checkout: self
+      fetchTags: true
+
+    - script: |
+        echo "Build.SourceBranch: $(Build.SourceBranch)"
+        # Expecting refs/tags/v1.2.3 → extract 1.2.3
+        TAG_REF="$(Build.SourceBranch)"
+        RAW_TAG="${TAG_REF#refs/tags/}"
+        VERSION="${RAW_TAG#v}"
+        echo "##vso[task.setvariable variable=VERSION]$VERSION"
+        echo "Version: $VERSION"
+      displayName: Extract version from git tag
+
+    - task: Docker@2
+      displayName: Login to ACR
+      inputs:
+        command: login
+        containerRegistry: $(acrServiceConnection)
+
+    - task: Docker@2
+      displayName: Build and push image
+      inputs:
+        command: buildAndPush
+        repository: $(imageName)
+        containerRegistry: $(acrServiceConnection)
+        dockerfile: WebApp.Dockerfile
+        buildContext: .
+        tags: |
+          $(VERSION)
