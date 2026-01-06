@@ -728,15 +728,27 @@ const Chat = () => {
     return []
   }
 
-   const replaceDocsUrls = (citations: Citation[]) => {
-    for (const citation of citations ) {
-      
-      if (citation.content.includes('https://docsenhance.blob.core.windows.net/docs/')) { 
-        // in citation.content get the wole word that starts with https://docsenhance.blob.core.windows.net/docs/ and
-        // replace it with https://docs.adinsure.com/. Also if the word ends with .md, replace with /
-        const regex = /https:\/\/docsenhance\.blob\.core\.windows\.net\/docs\/[^\s)]+/g 
+  const replaceDocsUrls = (citations: Citation[]) => {
+    // Make the source blob base URL configurable via env vars.
+    // Prefer `AZURE_STORAGE_CONTAINER_ADINSURE_DOCS_URL`,
+    // but keep compatibility fallbacks to the hard-coded URL.
+    const env = import.meta.env as any
+    const DOCS_BLOB_BASE: string =
+      env.AZURE_STORAGE_CONTAINER_ADINSURE_DOCS_URL ||
+      'https://adinsuredocsai.blob.core.windows.net/docs/'
+
+    // Escape the base for use in a RegExp
+    const escapeForRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const escapedBase = escapeForRegex(DOCS_BLOB_BASE)
+    // Match the base followed by non-space/non-')' characters
+    const regex = new RegExp(`${escapedBase}[^\\s)]+`, 'g')
+
+    for (const citation of citations) {
+      if (!citation?.content) continue
+      if (citation.content.includes(DOCS_BLOB_BASE)) {
+        // Replace matched blob URLs with the docs site URL, preserving remainder of path
         citation.content = citation.content.replace(regex, (match) => {
-          let newUrl = match.replace('https://docsenhance.blob.core.windows.net/docs/', 'https://docs.adinsure.com/')
+          let newUrl = match.replace(DOCS_BLOB_BASE, 'https://docs.adinsure.com/')
           if (newUrl.endsWith('.md')) {
             newUrl = newUrl.slice(0, -3) + '/'
           }
@@ -746,9 +758,8 @@ const Chat = () => {
           return newUrl
         })
       }
-
     }
-    return citations;
+    return citations
   }
 
   const parsePlotFromMessage = (message: ChatMessage) => {
