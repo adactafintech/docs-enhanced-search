@@ -720,46 +720,12 @@ const Chat = () => {
     if (message?.role && message?.role === 'tool' && typeof message?.content === "string") {
       try {
         const toolMessage = JSON.parse(message.content) as ToolMessageContent
-        return replaceDocsUrls(toolMessage.citations)
+        return toolMessage.citations
       } catch {
         return []
       }
     }
     return []
-  }
-
-  const replaceDocsUrls = (citations: Citation[]) => {
-    // Make the source blob base URL configurable via env vars.
-    // Prefer `AZURE_STORAGE_CONTAINER_ADINSURE_DOCS_URL`,
-    // but keep compatibility fallbacks to the hard-coded URL.
-    const env = import.meta.env as any
-    const DOCS_BLOB_BASE: string =
-      env.AZURE_STORAGE_CONTAINER_ADINSURE_DOCS_URL ||
-      'https://adinsuredocsai.blob.core.windows.net/docs/'
-
-    // Escape the base for use in a RegExp
-    const escapeForRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const escapedBase = escapeForRegex(DOCS_BLOB_BASE)
-    // Match the base followed by non-space/non-')' characters
-    const regex = new RegExp(`${escapedBase}[^\\s)]+`, 'g')
-
-    for (const citation of citations) {
-      if (!citation?.content) continue
-      if (citation.content.includes(DOCS_BLOB_BASE)) {
-        // Replace matched blob URLs with the docs site URL, preserving remainder of path
-        citation.content = citation.content.replace(regex, (match) => {
-          let newUrl = match.replace(DOCS_BLOB_BASE, 'https://docs.adinsure.com/')
-          if (newUrl.endsWith('.md')) {
-            newUrl = newUrl.slice(0, -3) + '/'
-          }
-          if (newUrl.endsWith('_index/')) {
-            newUrl = newUrl.slice(0, -7)
-          }
-          return newUrl
-        })
-      }
-    }
-    return citations
   }
 
   const parsePlotFromMessage = (message: ChatMessage) => {

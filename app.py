@@ -5,6 +5,7 @@ import logging
 import uuid
 import httpx
 import asyncio
+from dotenv import load_dotenv
 from quart import (
     Blueprint,
     Quart,
@@ -15,6 +16,9 @@ from quart import (
     render_template,
     current_app,
 )
+
+# Load environment variables from .env file
+load_dotenv()
 
 from openai import AsyncAzureOpenAI
 from azure.identity.aio import (
@@ -565,8 +569,45 @@ async def stream_chat_request(request_body, request_headers):
 async def conversation_internal(request_body, request_headers):
     try:
         if app_settings.azure_openai.stream and not app_settings.base_settings.use_promptflow:
-            result = await stream_chat_request(request_body, request_headers)
-            response = await make_response(format_as_ndjson(result))
+            # Get streaming result
+            stream = await stream_chat_request(request_body, request_headers)
+            
+            # Apply content replacements to the stream
+            docStoragePath = os.environ.get("AZURE_STORAGE_CONTAINER_ADINSURE_DOCS_URL", "https://adinsuredocsai.blob.core.windows.net/docs/")
+            replacements = {
+                ".md": "",
+                "_index/": "",
+            }
+            if docStoragePath:
+                replacements[docStoragePath] = "https://docs.adinsure.com/"
+            else:
+                logging.error("AZURE_STORAGE_CONTAINER_ADINSURE_DOCS_URL is not set")
+            
+            content_replacer = ContentReplacer(replacements)
+            
+            async def apply_replacements_to_stream():
+                """Wrapper generator that applies replacements to the stream."""
+                last_chunk_template = None
+                async for chunk in stream:
+                    processed_chunk = content_replacer.process_chunk(chunk)
+                    last_chunk_template = chunk  # keep original structure for flush metadata
+                    yield processed_chunk
+                
+                # Flush remaining buffer
+                remaining = content_replacer.flush()
+                if remaining:
+                    # Create a final chunk with remaining content, preserving metadata shape
+                    if last_chunk_template:
+                        final_chunk = copy.deepcopy(last_chunk_template)
+                        final_chunk = content_replacer._apply_to_content(final_chunk, remaining)
+                        yield final_chunk
+                    else:
+                        final_chunk = {
+                            "choices": [{"messages": [{"content": remaining}]}]
+                        }
+                        yield final_chunk
+            
+            response = await make_response(format_as_ndjson(apply_replacements_to_stream()))
             response.timeout = None
             response.mimetype = "application/json-lines"
             return response
@@ -1058,6 +1099,108 @@ async def generate_title(conversation_messages) -> str:
     except Exception as e:
         logging.exception("Exception while generating title", e)
         return messages[-2]["content"]
+
+
+class ContentReplacer:
+    """Handles content replacement across streaming chunks, buffering to catch matches that span chunks."""
+    
+    def __init__(self, replacements: dict[str, str]):
+        self.replacements = replacements
+        self.buffer = ""
+        # Max length we need to buffer to catch partial matches
+        self.max_search_len = max(len(s) for s in replacements.keys()) if replacements else 0
+    
+    def _apply_replacements(self, text: str) -> str:
+        """Apply all replacements to a string."""
+        for search, replace in self.replacements.items():
+            text = text.replace(search, replace)
+        return text
+
+    def _suffix_overlap_to_preserve(self, text: str) -> int:
+        """Return longest suffix length that could be the start of any search string.
+
+        This minimizes buffering while still allowing replacements that span chunk
+        boundaries. For each search term, we find the longest prefix that matches
+        the current text suffix and keep that length buffered.
+        """
+        max_overlap = 0
+        for search in self.replacements.keys():
+            # Only search up to the length of the search string or the text
+            max_len = min(len(search), len(text))
+            # Check progressively longer overlaps
+            for i in range(1, max_len + 1):
+                if text.endswith(search[:i]):
+                    max_overlap = max(max_overlap, i)
+        return max_overlap
+    
+    def _extract_content(self, obj):
+        """Extract string content from a dict/list structure."""
+        if isinstance(obj, dict):
+            # Look for content in messages
+            if "choices" in obj and isinstance(obj["choices"], list):
+                for choice in obj["choices"]:
+                    if "messages" in choice and isinstance(choice["messages"], list):
+                        for msg in choice["messages"]:
+                            if isinstance(msg, dict) and "content" in msg:
+                                return msg.get("content", "")
+            # Look for delta content
+            if "delta" in obj and isinstance(obj["delta"], dict):
+                return obj["delta"].get("content", "")
+        return None
+    
+    def _apply_to_content(self, obj, replacement_text):
+        """Apply replacement text back to the object's content."""
+        if isinstance(obj, dict):
+            # Apply to messages content
+            if "choices" in obj and isinstance(obj["choices"], list):
+                for choice in obj["choices"]:
+                    if "messages" in choice and isinstance(choice["messages"], list):
+                        for msg in choice["messages"]:
+                            if isinstance(msg, dict) and "content" in msg:
+                                msg["content"] = replacement_text
+                                return obj
+            # Apply to delta content
+            if "delta" in obj and isinstance(obj["delta"], dict):
+                obj["delta"]["content"] = replacement_text
+                return obj
+        return obj
+    
+    def process_chunk(self, chunk_obj):
+        """Process a chunk object and apply replacements with buffering."""
+        # Extract content from the chunk
+        content = self._extract_content(chunk_obj)
+        
+        if content is None or not isinstance(content, str) or not content:
+            # No string content to process, return as-is (no buffering needed)
+            return chunk_obj
+        
+        # Add to buffer
+        self.buffer += content
+        
+        # Apply replacements to buffer
+        self.buffer = self._apply_replacements(self.buffer)
+        
+        # Emit all but the minimal suffix that could still form a replacement across chunks.
+        keep_len = self._suffix_overlap_to_preserve(self.buffer)
+        if len(self.buffer) > keep_len:
+            safe_text = self.buffer[:-keep_len] if keep_len else self.buffer
+            self.buffer = self.buffer[-keep_len:] if keep_len else ""
+            modified_chunk = copy.deepcopy(chunk_obj)
+            modified_chunk = self._apply_to_content(modified_chunk, safe_text)
+            return modified_chunk
+
+        # Not enough buffered yet, return empty content chunk to maintain stream timing
+        empty_chunk = copy.deepcopy(chunk_obj)
+        empty_chunk = self._apply_to_content(empty_chunk, "")
+        return empty_chunk
+    
+    def flush(self):
+        """Flush remaining buffer at end of stream."""
+        if self.buffer:
+            remaining = self.buffer
+            self.buffer = ""
+            return remaining
+        return None
 
 
 app = create_app()
