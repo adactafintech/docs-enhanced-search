@@ -575,6 +575,7 @@ async def conversation_internal(request_body, request_headers):
             # Apply content replacements to the stream
             docStoragePath = os.environ.get("AZURE_STORAGE_CONTAINER_ADINSURE_DOCS_URL", "https://adinsuredocsai.blob.core.windows.net/docs/")
             replacements = {
+                "_index.md": "",
                 ".md": "",
                 "_index/": "",
             }
