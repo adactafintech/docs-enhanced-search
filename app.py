@@ -48,7 +48,13 @@ cosmos_db_ready = asyncio.Event()
 def create_app():
     app = Quart(__name__)
     # app = cors(app, allow_origin="*")  # or "*" during dev
-    app = cors(app, allow_origin="https://docs.adinsure.com") # production origin
+    app = cors(
+        app,
+        allow_origin=[
+            "https://docs.adinsure.com",
+            "http://localhost:1313",
+        ],
+    )
     app.register_blueprint(bp)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     
