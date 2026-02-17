@@ -13,7 +13,7 @@ trigger:
 variables:
   # Name of ACR service connection in Azure DevOps
   # (Create this in Project Settings -> Service connections)
-  acrServiceConnection: 'adinsure-acr-connection'
+  acrServiceConnection: 'acrServiceConnection'
   acrName: 'adinsure.azurecr.io'
   imageName: 'operations/docs-enhanced-search'
 
