@@ -9,6 +9,13 @@ if "%errorlevel%" neq "0" (
     exit /B %errorlevel%
 )
 
+REM Load UI_URL_PREFIX from .env if it exists (before changing directory)
+if exist .env (
+    for /f "usebackq tokens=1,* delims==" %%a in (.env) do (
+        if "%%a"=="UI_URL_PREFIX" set "UI_URL_PREFIX=%%b"
+    )
+)
+
 echo.
 echo Restoring frontend npm packages
 echo.
@@ -22,6 +29,14 @@ if "%errorlevel%" neq "0" (
 echo.
 echo Building frontend
 echo.
+REM Set VITE_URL_PREFIX to match UI_URL_PREFIX for frontend build
+if defined UI_URL_PREFIX (
+    set "VITE_URL_PREFIX=%UI_URL_PREFIX%"
+    echo Building with URL prefix: %UI_URL_PREFIX%
+) else (
+    set "VITE_URL_PREFIX="
+    echo Building for root path
+)
 call npm run build
 if "%errorlevel%" neq "0" (
     echo Failed to build frontend
@@ -31,9 +46,14 @@ if "%errorlevel%" neq "0" (
 echo.    
 echo Starting backend    
 echo.    
-cd ..  
-start http://127.0.0.1:50505
-call python -m uvicorn app:app  --port 50505 --reload
+cd ..
+REM Open browser with correct URL based on UI_URL_PREFIX
+if defined UI_URL_PREFIX (
+    start http://127.0.0.1:50505%UI_URL_PREFIX%
+) else (
+    start http://127.0.0.1:50505
+)
+call python -m quart run --port 50505 --host 127.0.0.1 --reload
 if "%errorlevel%" neq "0" (    
     echo Failed to start backend    
     exit /B %errorlevel%    

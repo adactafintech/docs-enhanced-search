@@ -4,6 +4,7 @@ import { defineConfig } from 'vite'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  base: process.env.VITE_URL_PREFIX || '/',
   build: {
     outDir: '../static',
     emptyOutDir: true,

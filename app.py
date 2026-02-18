@@ -53,10 +53,32 @@ def create_app():
         allow_origin=[
             "https://docs.adinsure.com",
             "http://localhost:1313",
+            "http://127.0.0.1:50505",
+            "http://localhost:50505",
         ],
     )
-    app.register_blueprint(bp)
+    # Register blueprint with URL prefix from settings
+    url_prefix = app_settings.ui.url_prefix if app_settings.ui.url_prefix else None
+    app.register_blueprint(bp, url_prefix=url_prefix)
+    
+    # Log the URL prefix configuration
+    if url_prefix:
+        logging.info(f"Application registered with URL prefix: {url_prefix}")
+        logging.info(f"Access the app at: http://127.0.0.1:50505{url_prefix}/")
+    else:
+        logging.info("Application registered at root path (no URL prefix)")
+        logging.info("Access the app at: http://127.0.0.1:50505/")
+    
+    # Log all registered routes for debugging
+    logging.debug("Registered routes:")
+    for rule in app.url_map.iter_rules():
+        logging.debug(f"  {rule.rule} -> {rule.endpoint}")
+    
     app.config["TEMPLATES_AUTO_RELOAD"] = True
+    
+    @app.before_request
+    async def log_request():
+        logging.info(f"INCOMING REQUEST: {request.method} {request.path}")
     
     @app.before_serving
     async def init():
@@ -73,10 +95,12 @@ def create_app():
 
 @bp.route("/")
 async def index():
+    logging.info("Index route called - rendering template")
     return await render_template(
         "index.html",
         title=app_settings.ui.title,
-        favicon=app_settings.ui.favicon
+        favicon=app_settings.ui.favicon,
+        url_prefix=app_settings.ui.url_prefix
     )
 
 
@@ -91,7 +115,7 @@ async def assets(path):
 
 
 # Debug settings
-DEBUG = os.environ.get("DEBUG", "false")
+DEBUG = os.environ.get("DEBUG", "true")  # Changed default to true for debugging
 if DEBUG.lower() == "true":
     logging.basicConfig(level=logging.DEBUG)
 
@@ -113,6 +137,7 @@ frontend_settings = {
         "chat_description": app_settings.ui.chat_description,
         "show_share_button": app_settings.ui.show_share_button,
         "show_chat_history_button": app_settings.ui.show_chat_history_button,
+        "url_prefix": app_settings.ui.url_prefix,
     },
     "sanitize_answer": app_settings.base_settings.sanitize_answer,
     "oyd_enabled": app_settings.base_settings.datasource_type,
