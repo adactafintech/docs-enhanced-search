@@ -13,6 +13,8 @@ fi
 echo ""
 echo "Building frontend"
 echo ""
+# Set VITE_URL_PREFIX if not already set (defaults to empty for root hosting)
+export VITE_URL_PREFIX=${VITE_URL_PREFIX:-}
 npm run build
 if [ $? -ne 0 ]; then
     echo "Failed to build frontend"

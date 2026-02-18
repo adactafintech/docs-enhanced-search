@@ -48,7 +48,22 @@ class _UiSettings(BaseSettings):
     chat_description: str = "This chatbot is configured to answer your questions about Adinsure."
     favicon: str = "/favicon.ico"
     show_share_button: bool = True
+    url_prefix: str = Field(default="", description="URL prefix for the application (e.g., '/urlprefix')")
     show_chat_history_button: bool = True
+    
+    @field_validator('url_prefix')
+    @classmethod
+    def validate_url_prefix(cls, v: str) -> str:
+        """Validate URL prefix format"""
+        if not v:  # Empty string is valid (root hosting)
+            return ""
+        # Must start with /
+        if not v.startswith('/'):
+            raise ValueError("URL prefix must start with / (e.g., '/myapp')")
+        # Must not end with /
+        if v.endswith('/'):
+            raise ValueError("URL prefix must not end with / (use '/myapp' not '/myapp/')")
+        return v
 
 
 class _ChatHistorySettings(BaseSettings):
