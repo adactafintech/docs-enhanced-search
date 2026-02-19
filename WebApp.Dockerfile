@@ -9,7 +9,7 @@ COPY --chown=node:node ./frontend/ ./frontend
 COPY --chown=node:node ./static/ ./static  
 WORKDIR /home/node/app/frontend
 # Accept build argument for URL prefix
-ARG VITE_URL_PREFIX=""
+ARG VITE_URL_PREFIX="/chat"
 ENV VITE_URL_PREFIX=$VITE_URL_PREFIX
 RUN NODE_OPTIONS=--max_old_space_size=8192 npm run build
   

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure AI Search Architecture: Integrated RAG Pipeline</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- 
+    PLAN & NARRATIVE:
+    1. Scheduled Sync: Release Portal -> Azure Blob Storage -> Scheduled Indexer (Daily/Weekly).
+    2. Enrichment Engine: Cracking, Semantic Chunking, and text-embedding-3-large Vectorization.
+    3. THE RAG INTELLIGENCE (UNIFIED): Merging High-Dimensional Search with Prompt Orchestration.
+       This section visualizes the math (Similarity Scores) and the resulting Prompt Construction.
+    4. Secure Backend Gateway: Identity verification (Entra ID) and API protection.
+
+    TECHNICAL CONFIRMATIONS:
+    - NO SVG/Mermaid used.
+    - Monochromatic Light Blue palette.
+    - Model: text-embedding-3-large (3072 dimensions).
+    - Order: 3 and 5 joined into Point 3.
+    - Chart.js labels > 16 characters are wrapped into arrays.
+    - Tooltip configurations follow strict requirements.
+    -->
+
+    <style>
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: #F0F9FF;
+            color: #0C4A6E;
+        }
+        .blue-gradient-text {
+            background: linear-gradient(135deg, #0369A1 0%, #0EA5E9 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 400px;
+        }
+        @media (max-width: 640px) {
+            .chart-container {
+                height: 280px;
+            }
+        }
+        .flow-arrow {
+            font-size: 1.5rem;
+            color: #7DD3FC;
+            margin: 0 0.5rem;
+        }
+        .step-circle {
+            width: 2.25rem;
+            height: 2.25rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: white;
+            background-color: #0EA5E9;
+            flex-shrink: 0;
+            font-size: 0.8rem;
+        }
+        .data-card {
+            background: white;
+            border: 2px solid #BAE6FD;
+            padding: 1rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(186, 230, 253, 0.4);
+        }
+        .connection-line {
+            width: 2px;
+            height: 20px;
+            background-color: #BAE6FD;
+            margin: 0 auto;
+        }
+        .skill-list-item {
+            background: white;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            border: 1px solid #E0F2FE;
+            transition: all 0.2s ease;
+        }
+        .skill-list-item:hover {
+            border-color: #7DD3FC;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.1);
+        }
+    </style>
+</head>
+<body class="p-4 md:p-10">
+
+    <header class="max-w-7xl mx-auto mb-16 text-center">
+        <div class="inline-block px-3 py-1 mb-4 text-xs font-bold tracking-widest text-sky-700 uppercase bg-sky-200 rounded-full">
+            Engineering Blueprint
+        </div>
+        <h1 class="text-4xl md:text-5xl font-black mb-4">
+            <span class="blue-gradient-text">Azure AI Search</span> Implementation
+        </h1>
+        <p class="text-lg text-sky-700/80 max-w-2xl mx-auto font-medium">
+            The Azure AI Search index stores searchable content and applies semantic ranking and natural language understanding to deliver results based on the underlying meaning and intent of a query rather than just simple keyword matches.
+        </p>
+    </header>
+
+    <main class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 mb-16">
+
+        <!-- 1. Scheduled Ingestion -->
+        <section class="bg-white rounded-3xl shadow-sm p-8 md:col-span-2 border border-sky-100">
+            <h2 class="text-xl font-extrabold text-sky-900 mb-6 flex items-center">
+                <span class="w-1.5 h-6 bg-sky-500 mr-3 rounded-full"></span>
+                1. Ingestion Pipeline: Scheduled Sync from release of Documentation Portal to Search Index
+            </h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+                <p class="text-sky-800/80 leading-relaxed">
+                    Adinsure documentation is maintained in <code>.md</code> format. Currently you can browse it on the <a href="https://docs.adinsure.com/" style="text-decoration: underline;">documentation portal</a>. Upon portal release, files are pushed to <b>Azure Blob Storage</b>. The <b>Scheduled Indexer Execution</b> configuration allows the Indexer to run at defined intervals (e.g., daily), automatically syncing new and modified content to the search index.
+                </p>
+                <div class="flex items-center justify-between p-6 bg-sky-50 rounded-2xl border border-sky-100">
+                    <div class="text-center">
+                        <div class="text-3xl mb-1">📂</div>
+                        <div class="text-[10px] font-bold text-sky-600 uppercase">Release Portal</div>
+                    </div>
+                    <div class="flow-arrow">&#10142;</div>
+                    <div class="text-center">
+                        <div class="text-3xl mb-1">☁️</div>
+                        <div class="text-[10px] font-bold text-sky-600 uppercase">Blob Storage</div>
+                    </div>
+                    <div class="flow-arrow">&#10142;</div>
+                    <div class="text-center">
+                        <div class="text-3xl mb-1">📅</div>
+                        <div class="text-[10px] font-bold text-sky-600 uppercase">Sync Schedule</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Enrichment Pipeline -->
+        <section class="bg-white rounded-3xl shadow-sm p-8 md:col-span-2 border border-sky-100">
+            <h2 class="text-xl font-extrabold text-sky-900 mb-6 flex items-center">
+                <span class="w-1.5 h-6 bg-sky-500 mr-3 rounded-full"></span>
+                2. Enrichment Engine: Text to Vectors
+            </h2>
+            <div class="space-y-6">
+                <p class="text-sky-800/80 leading-relaxed max-w-4xl">
+                    The enrichment pipeline transforms raw Markdown fragments into semantic coordinate representations, structuring documentation for high-precision retrieval during the RAG workflow.
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="skill-list-item flex flex-col items-center text-center">
+                        <div class="step-circle mb-4">A</div>
+                        <h4 class="font-bold text-sky-900 text-sm mb-2">Document Cracking</h4>
+                        <p class="text-xs text-sky-700/70">Extracts Markdown text bodies and identifies technical metadata (URI, file path, last modified) for delta-sync change tracking.</p>
+                    </div>
+                    <div class="skill-list-item flex flex-col items-center text-center">
+                        <div class="step-circle mb-4">B</div>
+                        <h4 class="font-bold text-sky-900 text-sm mb-2">Token Chunking</h4>
+                        <p class="text-xs text-sky-700/70">Segments long documents into chunks based on semantic boundaries to preserve context.</p>
+                    </div>
+                    <div class="skill-list-item flex flex-col items-center text-center">
+                        <div class="step-circle mb-4">C</div>
+                        <h4 class="font-bold text-sky-900 text-sm mb-2">Vector Generation</h4>
+                        <p class="text-xs text-sky-700/70">Calls the <strong>text-embedding-3-large</strong> model to generate embeddings, capturing the semantic essence of the data and stores it in vector databases for efficient retrieval.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. UNIFIED: THE RAG INTELLIGENCE (Joined Search and Orchestration) -->
+        <section class="bg-white rounded-3xl shadow-sm p-8 md:col-span-2 border-t-4 border-sky-500">
+            <h2 class="text-2xl font-black text-sky-900 mb-6 flex items-center">
+                <span class="w-2 h-8 bg-sky-500 mr-3 rounded-full"></span>
+                3. The AI Engine: From Question to Answer
+            </h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+                
+                <!-- Part A: Similarity Retrieval -->
+                <div>
+                    <h3 class="text-sm font-bold text-sky-700 uppercase tracking-widest mb-4">Step A: Finding the Best Matches</h3>
+                    <p class="text-sky-800/80 text-sm mb-6 leading-relaxed">
+                        When you ask a question, the search engine looks for document sections with the most similar meaning. It uses a high-performance ranking system to score every piece of data.
+                    </p>
+                    <div class="chart-container h-72">
+                        <canvas id="similarityChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Part B: Prompt Orchestration (SIMPLIFIED LANGUAGE) -->
+                <div>
+                    <h3 class="text-sm font-bold text-sky-700 uppercase tracking-widest mb-4">Step B: Building the AI Response</h3>
+                    <p class="text-sky-800/80 text-sm mb-6 leading-relaxed">
+                        The most relevant parts of your documents are selected and combined with clear instructions for the AI. This ensures the AI stays focused on your data, providing accurate answers based only on your official documentation.
+                    </p>
+                    
+                    <div class="space-y-0 text-center max-w-sm mx-auto">
+                        <div class="data-card bg-sky-50 inline-block w-full">
+                            <div class="text-[10px] font-bold text-sky-500 uppercase mb-1">Official Data</div>
+                            <div class="text-xs font-bold">The best pieces from your documents</div>
+                        </div>
+                        <div class="connection-line"></div>
+                        <div class="data-card inline-block w-full">
+                            <div class="text-[10px] font-bold text-sky-500 uppercase mb-1">AI Instructions</div>
+                            <div class="text-xs font-bold">"Only use the document facts above."</div>
+                        </div>
+                        <div class="connection-line"></div>
+                        <div class="data-card bg-sky-600 border-none text-white shadow-lg inline-block w-full">
+                            <div class="text-[10px] font-bold uppercase opacity-80 mb-1">Final Result</div>
+                            <div class="text-sm font-black italic">A reliable, fact-based answer</div>
+                        </div>
+                    </div>
+                    <div class="mt-6 p-4 bg-sky-50 rounded-xl border border-sky-100 text-[10px] text-sky-600 italic">
+                        By grounding the AI in actual documents, we prevent it from "guessing" or providing incorrect information.
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- 4. Secure Backend Gateway -->
+        <section class="bg-white rounded-3xl shadow-sm p-8 md:col-span-2 border border-sky-100">
+            <h2 class="text-xl font-extrabold text-sky-900 mb-6 flex items-center">
+                <span class="w-1.5 h-6 bg-sky-500 mr-3 rounded-full"></span>
+                4. Secure Backend Access
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+                <p class="text-sky-800/80 text-sm leading-relaxed">
+                    We created a private backend application that manages all communication. This acts as a security gatekeeper, making sure only authorized users can interact with our AI search tool. It can also be used to monitor and control how the system is used.
+                </p>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="p-5 bg-sky-50 rounded-2xl flex flex-col items-center text-center border border-sky-100">
+                        <div class="text-2xl mb-2">🛡️</div>
+                        <div class="text-[10px] font-bold text-sky-600 uppercase tracking-widest mb-1">Identity</div>
+                        <div class="text-[11px] font-bold text-sky-800">Secure User Login Check</div>
+                    </div>
+                    <div class="p-5 bg-sky-50 rounded-2xl flex flex-col items-center text-center border border-sky-100">
+                        <div class="text-2xl mb-2">⚡</div>
+                        <div class="text-[10px] font-bold text-sky-600 uppercase tracking-widest">Protection</div>
+                        <div class="text-[11px] font-bold text-sky-800">Traffic & Use Monitoring</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="text-center pb-12 text-sky-400 text-xs font-bold tracking-widest uppercase">
+        <p>Azure AI Search &bull; Systems Design Architecture Review 2026</p>
+    </footer>
+
+    <script>
+        // Label wrapping logic (max 16 chars)
+        function wrap(str, limit = 16) {
+            if (typeof str !== 'string') return str;
+            const res = [];
+            const words = str.split(" ");
+            let line = "";
+            words.forEach((w, i) => {
+                if ((line + w).length > limit) {
+                    res.push(line.trim());
+                    line = w + " ";
+                } else { line += w + " "; }
+                if (i === words.length - 1) res.push(line.trim());
+            });
+            return res;
+        }
+
+        // Mandatory tooltip config for Chart.js
+        const tooltipConfig = {
+            callbacks: {
+                title: function(items) {
+                    const label = items[0].chart.data.labels[items[0].dataIndex];
+                    if (Array.isArray(label)) {
+                        return label.join(' ');
+                    } else {
+                        return label;
+                    }
+                }
+            }
+        };
+
+        window.onload = () => {
+            // Similarity Scoring Chart (Inside the Unified Engine section)
+            new Chart(document.getElementById('similarityChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: ['Documentation Match Segment A', 'Documentation Match Segment B', 'Technical Reference C', 'Low-Relevance Match', 'Irrelevant Noise Fragment'].map(l => wrap(l, 12)),
+                    datasets: [{
+                        label: 'Similarity Score',
+                        data: [0.97, 0.91, 0.84, 0.41, 0.14],
+                        backgroundColor: (c) => c.raw > 0.8 ? '#0EA5E9' : '#BAE6FD',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { 
+                        y: { 
+                            beginAtZero: true, 
+                            max: 1, 
+                            ticks: { color: '#0EA5E9', font: { size: 9 } }, 
+                            grid: { color: '#E0F2FE' } 
+                        },
+                        x: { 
+                            ticks: { color: '#0369A1', font: { size: 9 } }, 
+                            grid: { display: false } 
+                        }
+                    },
+                    plugins: { 
+                        tooltip: tooltipConfig,
+                        legend: { display: false }
+                    }
+                }
+            });
+        };
+    </script>
+</body>
+</html>
