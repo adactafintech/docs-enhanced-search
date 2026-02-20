@@ -56,6 +56,10 @@ def create_app():
             "http://127.0.0.1:50505",
             "http://localhost:50505",
         ],
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+        allow_credentials=True,
+        max_age=3600,
     )
     # Register blueprint with URL prefix from settings
     url_prefix = app_settings.ui.url_prefix if app_settings.ui.url_prefix else None
@@ -667,7 +671,7 @@ async def conversation():
 
 
 @bp.route("/frontend_settings", methods=["GET"])
-def get_frontend_settings():
+async def get_frontend_settings():
     try:
         return jsonify(frontend_settings), 200
     except Exception as e:
