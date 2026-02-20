@@ -776,6 +776,15 @@ class _BaseSettings(BaseSettings):
     auth_enabled: bool = True
     sanitize_answer: bool = False
     use_promptflow: bool = False
+    allowed_origins: str = "https://docs.adinsure.com|http://localhost:1313|http://127.0.0.1:50505|http://localhost:50505"
+    
+    @field_validator('allowed_origins')
+    @classmethod
+    def parse_allowed_origins(cls, v: str) -> List[str]:
+        """Parse pipe-separated allowed origins into a list"""
+        if isinstance(v, str) and v:
+            return parse_multi_columns(v)
+        return []
 
 
 class _AppSettings(BaseModel):

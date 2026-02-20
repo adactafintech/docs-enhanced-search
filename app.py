@@ -48,14 +48,10 @@ cosmos_db_ready = asyncio.Event()
 def create_app():
     app = Quart(__name__)
     # app = cors(app, allow_origin="*")  # or "*" during dev
+    
     app = cors(
         app,
-        allow_origin=[
-            "https://docs.adinsure.com",
-            "http://localhost:1313",
-            "http://127.0.0.1:50505",
-            "http://localhost:50505",
-        ],
+        allow_origin=app_settings.base_settings.allowed_origins,
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
         allow_credentials=True,

@@ -495,6 +495,7 @@ The interface allows for easy adaptation of the UI by modifying certain elements
 |UI_SHOW_SHARE_BUTTON|No|True|Share button (right-top)
 |UI_SHOW_CHAT_HISTORY_BUTTON|No|True|Show chat history button (right-top)
 |SANITIZE_ANSWER|No|False|Whether to sanitize the answer from Azure OpenAI. Set to True to remove any HTML tags from the response.|
+|ALLOWED_ORIGINS|No|https://docs.adinsure.com\|http://localhost:1313\|http://127.0.0.1:50505\|http://localhost:50505|List of allowed CORS origins for the application. Represent these as a string joined with "\|", e.g. `"https://example.com|http://localhost:3000"`|
 
 Any custom images assigned to variables `UI_LOGO`, `UI_CHAT_LOGO` or `UI_FAVICON` should be added to the [public](https://github.com/microsoft/sample-app-aoai-chatGPT/tree/main/frontend/public) folder before building the project. The Vite build process will automatically copy theses files to the [static](https://github.com/microsoft/sample-app-aoai-chatGPT/tree/main/static) folder on each build of the frontend. The corresponding environment variables should then be set using a relative path such as `static/<my image filename>` to ensure that the frontend code can find them.
 
