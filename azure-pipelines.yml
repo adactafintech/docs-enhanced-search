@@ -10,6 +10,9 @@ trigger:
     include:
       - v*
 
+# The image tag comes from the git tag, so PR builds have no valid version
+pr: none
+
 variables:
   # Name of ACR service connection in Azure DevOps
   # (Create this in Project Settings -> Service connections)
