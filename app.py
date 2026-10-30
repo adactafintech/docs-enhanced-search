@@ -39,6 +39,7 @@ from backend.utils import (
     convert_to_pf_format,
     format_pf_non_streaming_response,
 )
+from backend.search import build_grounded_messages, retrieve
 
 bp = Blueprint("routes", __name__, static_folder="static", template_folder="static")
 
@@ -275,7 +276,11 @@ async def init_cosmosdb_client():
     return cosmos_conversation_client
 
 
-def prepare_model_args(request_body, request_headers):
+def uses_azure_search_retrieval():
+    return app_settings.base_settings.datasource_type == "AzureCognitiveSearch"
+
+
+def prepare_model_args(request_body, request_headers, search_context=None):
     request_messages = request_body.get("messages", [])
     messages = []
     if not app_settings.datasource:
@@ -318,6 +323,13 @@ def prepare_model_args(request_body, request_headers):
         user_security_context = get_msdefender_user_json(authenticated_user_details, request_headers, application_name )  # security component introduced here https://learn.microsoft.com/en-us/azure/defender-for-cloud/gain-end-user-context-ai
     
 
+    if search_context is not None:
+        messages = build_grounded_messages(
+            app_settings.azure_openai.system_message,
+            search_context["citations"],
+            messages,
+        )
+
     model_args = {
         "messages": messages,
         "temperature": app_settings.azure_openai.temperature,
@@ -327,13 +339,15 @@ def prepare_model_args(request_body, request_headers):
         "stream": app_settings.azure_openai.stream,
         "model": app_settings.azure_openai.model
     }
+    if app_settings.azure_openai.seed is not None:
+        model_args["seed"] = app_settings.azure_openai.seed
 
     if len(messages) > 0:
         if messages[-1]["role"] == "user":
             if app_settings.azure_openai.function_call_azure_functions_enabled and len(azure_openai_tools) > 0:
                 model_args["tools"] = azure_openai_tools
 
-            if app_settings.datasource:
+            if app_settings.datasource and search_context is None:
                 model_args["extra_body"] = {
                     "data_sources": [
                         app_settings.datasource.construct_payload_configuration(
@@ -463,18 +477,31 @@ async def send_chat_request(request_body, request_headers):
             filtered_messages.append(message)
             
     request_body['messages'] = filtered_messages
-    model_args = prepare_model_args(request_body, request_headers)
 
     try:
         azure_openai_client = await init_openai_client()
+        search_context = None
+        if uses_azure_search_retrieval():
+            search_context = await retrieve(azure_openai_client, app_settings, filtered_messages)
+        model_args = prepare_model_args(request_body, request_headers, search_context)
         raw_response = await azure_openai_client.chat.completions.with_raw_response.create(**model_args)
         response = raw_response.parse()
-        apim_request_id = raw_response.headers.get("apim-request-id") 
+        apim_request_id = raw_response.headers.get("apim-request-id")
     except Exception as e:
         logging.exception("Exception in send_chat_request")
         raise e
 
-    return response, apim_request_id
+    return response, apim_request_id, search_context
+
+
+def format_search_context_message(search_context, history_metadata, apim_request_id):
+    """Build the tool message that carries the citations, like On Your Data used to send."""
+    return {
+        "id": str(uuid.uuid4()),
+        "choices": [{"messages": [{"role": "tool", "content": json.dumps(search_context)}]}],
+        "history_metadata": history_metadata,
+        "apim-request-id": apim_request_id,
+    }
 
 
 async def complete_chat_request(request_body, request_headers):
@@ -488,7 +515,7 @@ async def complete_chat_request(request_body, request_headers):
             app_settings.promptflow.citations_field_name
         )
     else:
-        response, apim_request_id = await send_chat_request(request_body, request_headers)
+        response, apim_request_id, search_context = await send_chat_request(request_body, request_headers)
         history_metadata = request_body.get("history_metadata", {})
         non_streaming_response = format_non_streaming_response(response, history_metadata, apim_request_id)
 
@@ -498,9 +525,14 @@ async def complete_chat_request(request_body, request_headers):
             if function_response:
                 request_body["messages"].extend(function_response)
 
-                response, apim_request_id = await send_chat_request(request_body, request_headers)
+                response, apim_request_id, search_context = await send_chat_request(request_body, request_headers)
                 history_metadata = request_body.get("history_metadata", {})
                 non_streaming_response = format_non_streaming_response(response, history_metadata, apim_request_id)
+
+        if search_context is not None and non_streaming_response:
+            non_streaming_response["choices"][0]["messages"].insert(
+                0, {"role": "tool", "content": json.dumps(search_context)}
+            )
 
     return non_streaming_response
 
@@ -569,10 +601,13 @@ async def process_function_call_stream(completionChunk, function_call_stream_sta
 
 
 async def stream_chat_request(request_body, request_headers):
-    response, apim_request_id = await send_chat_request(request_body, request_headers)
+    response, apim_request_id, search_context = await send_chat_request(request_body, request_headers)
     history_metadata = request_body.get("history_metadata", {})
-    
+
     async def generate(apim_request_id, history_metadata):
+        if search_context is not None:
+            yield format_search_context_message(search_context, history_metadata, apim_request_id)
+
         if app_settings.azure_openai.function_call_azure_functions_enabled:
             # Maintain state during function call streaming
             function_call_stream_state = AzureOpenaiFunctionCallStreamState()
@@ -588,7 +623,7 @@ async def stream_chat_request(request_body, request_headers):
                 # Append function calls and results to history and send to OpenAI, to stream the final answer.
                 if stream_state == "COMPLETED":
                     request_body["messages"].extend(function_call_stream_state.function_messages)
-                    function_response, apim_request_id = await send_chat_request(request_body, request_headers)
+                    function_response, apim_request_id, _ = await send_chat_request(request_body, request_headers)
                     async for functionCompletionChunk in function_response:
                         yield format_stream_response(functionCompletionChunk, history_metadata, apim_request_id)
                 
